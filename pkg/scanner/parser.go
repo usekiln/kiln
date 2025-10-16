@@ -5,9 +5,11 @@ package scanner
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -56,8 +58,18 @@ func ParseTerraform(content []byte) (*TerraformData, error) {
 		config := make(map[string]interface{})
 
 		for name, attr := range attrs {
-			val, _ := attr.Expr.Value(nil)
-			config[name] = ctyToGo(val)
+			// Try to extract the value
+			val, valDiags := attr.Expr.Value(nil)
+
+			// If we can't evaluate it (e.g., it's a reference), get the raw expression
+			if valDiags.HasErrors() {
+				// Handle Terraform references like aws_s3_bucket.example.id
+				if refVal := extractReference(attr.Expr); refVal != "" {
+					config[name] = refVal
+				}
+			} else {
+				config[name] = ctyToGo(val)
+			}
 		}
 
 		// Check for nested blocks
@@ -66,12 +78,81 @@ func ParseTerraform(content []byte) (*TerraformData, error) {
 				{Type: "server_side_encryption_configuration"},
 				{Type: "logging"},
 				{Type: "versioning"},
+				{Type: "versioning_configuration"},
+				{Type: "rule"},
+				{Type: "default_action"},
+				{Type: "redirect"},
 			},
 		}
 		nestedContent, _, _ := block.Body.PartialContent(nestedSchema)
 
+		// Process nested blocks and extract their attributes
 		for _, nestedBlock := range nestedContent.Blocks {
+			// Mark that the block exists
 			config[nestedBlock.Type] = true
+
+			// Extract attributes from nested blocks
+			nestedAttrs, _ := nestedBlock.Body.JustAttributes()
+			nestedConfig := make(map[string]interface{})
+
+			for name, attr := range nestedAttrs {
+				val, valDiags := attr.Expr.Value(nil)
+				if valDiags.HasErrors() {
+					if refVal := extractReference(attr.Expr); refVal != "" {
+						nestedConfig[name] = refVal
+					}
+				} else {
+					nestedConfig[name] = ctyToGo(val)
+				}
+			}
+
+			// Store nested block config if it has attributes
+			if len(nestedConfig) > 0 {
+				// Handle as array if multiple blocks of same type
+				if existing, exists := config[nestedBlock.Type]; exists {
+					if existingMap, ok := existing.(map[string]interface{}); ok {
+						// Convert to array
+						config[nestedBlock.Type] = []interface{}{existingMap, nestedConfig}
+					} else if existingArray, ok := existing.([]interface{}); ok {
+						// Append to existing array
+						config[nestedBlock.Type] = append(existingArray, nestedConfig)
+					}
+				} else {
+					config[nestedBlock.Type] = nestedConfig
+				}
+			}
+
+			// Recursively handle nested blocks within nested blocks
+			deepNestedSchema := &hcl.BodySchema{
+				Blocks: []hcl.BlockHeaderSchema{
+					{Type: "redirect"},
+					{Type: "rule"},
+					{Type: "apply_server_side_encryption_by_default"},
+				},
+			}
+			deepNestedContent, _, _ := nestedBlock.Body.PartialContent(deepNestedSchema)
+
+			for _, deepBlock := range deepNestedContent.Blocks {
+				deepAttrs, _ := deepBlock.Body.JustAttributes()
+				deepConfig := make(map[string]interface{})
+
+				for name, attr := range deepAttrs {
+					val, valDiags := attr.Expr.Value(nil)
+					if valDiags.HasErrors() {
+						if refVal := extractReference(attr.Expr); refVal != "" {
+							deepConfig[name] = refVal
+						}
+					} else {
+						deepConfig[name] = ctyToGo(val)
+					}
+				}
+
+				if len(deepConfig) > 0 {
+					if nestedMap, ok := config[nestedBlock.Type].(map[string]interface{}); ok {
+						nestedMap[deepBlock.Type] = deepConfig
+					}
+				}
+			}
 		}
 
 		data.Resources = append(data.Resources, Resource{
@@ -92,6 +173,53 @@ func ParseTerraform(content []byte) (*TerraformData, error) {
 	}
 
 	return data, nil
+}
+
+// extractReference extracts Terraform references like aws_s3_bucket.example.id
+func extractReference(expr hcl.Expression) string {
+	// Try to get the expression as a traversal
+	traversal, diags := hcl.AbsTraversalForExpr(expr)
+	if !diags.HasErrors() {
+		// Convert traversal to string like "aws_s3_bucket.example.id"
+		var parts []string
+		for _, traverser := range traversal {
+			switch t := traverser.(type) {
+			case hcl.TraverseRoot:
+				parts = append(parts, t.Name)
+			case hcl.TraverseAttr:
+				parts = append(parts, t.Name)
+			case hcl.TraverseIndex:
+				// Handle index like [0] or ["key"]
+				if t.Key.Type() == cty.String {
+					parts = append(parts, fmt.Sprintf("[%q]", t.Key.AsString()))
+				} else if t.Key.Type() == cty.Number {
+					num, _ := t.Key.AsBigFloat().Float64()
+					parts = append(parts, fmt.Sprintf("[%d]", int(num)))
+				}
+			}
+		}
+		return strings.Join(parts, ".")
+	}
+
+	// Fallback: try to get source bytes from the expression
+	// This handles more complex expressions
+	if syntaxExpr, ok := expr.(*hclsyntax.ScopeTraversalExpr); ok {
+		// Build the reference from the traversal
+		var parts []string
+		for _, traverser := range syntaxExpr.Traversal {
+			switch t := traverser.(type) {
+			case hcl.TraverseRoot:
+				parts = append(parts, t.Name)
+			case hcl.TraverseAttr:
+				parts = append(parts, t.Name)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, ".")
+		}
+	}
+
+	return ""
 }
 
 // ctyToGo converts cty.Value to Go types

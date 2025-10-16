@@ -17,8 +17,8 @@ func PrintCLI(result *scanner.Result) {
 	// Header
 	printHeader()
 
-	// Compliance Score with visual bar
-	printComplianceScore(result.Score)
+	// Audit Readiness Score with visual bar
+	printAuditReadinessScore(result.Score)
 	fmt.Println()
 
 	// Summary counts
@@ -47,9 +47,14 @@ func PrintCLI(result *scanner.Result) {
 	}
 
 	// Next steps
-	if len(result.Violations) > 0 {
+	if len(result.Violations) > 0 || len(result.Warnings) > 0 {
 		printNextSteps(result)
+	} else {
+		printAllGood(result)
 	}
+
+	// Footer disclaimer
+	printFooter()
 
 	fmt.Println() // Spacing
 }
@@ -63,12 +68,12 @@ func printHeader() {
 	fmt.Print(cyan)
 	fmt.Print("Kiln ")
 	fmt.Print(colorReset)
-	fmt.Print("v0.1.0 - SOC2 Compliance Scanner")
+	fmt.Print("v0.1.0 - SOC2 Trust Service Criteria Scanner")
 	fmt.Println()
 	fmt.Println()
 }
 
-func printComplianceScore(score int) {
+func printAuditReadinessScore(score int) {
 	bold := colorBold
 
 	// Determine color based on score
@@ -90,7 +95,7 @@ func printComplianceScore(score int) {
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barLength-filled)
 
 	fmt.Print(bold)
-	fmt.Print("📊 Compliance Score: ")
+	fmt.Print("📊 Audit Readiness: ")
 	fmt.Print(scoreColor)
 	fmt.Printf("%d/100 ", score)
 	fmt.Print(colorReset)
@@ -102,7 +107,7 @@ func printSummary(result *scanner.Result) {
 
 	if len(result.Passed) > 0 {
 		fmt.Print(colorGreen)
-		fmt.Printf("✅ %d checks passed\n", len(result.Passed))
+		fmt.Printf("✅ %d controls implemented\n", len(result.Passed))
 		fmt.Print(colorReset)
 	}
 
@@ -114,7 +119,7 @@ func printSummary(result *scanner.Result) {
 
 	if len(result.Violations) > 0 {
 		fmt.Print(colorRed)
-		fmt.Printf("❌ %d critical issues found\n", len(result.Violations))
+		fmt.Printf("❌ %d critical gaps found\n", len(result.Violations))
 		fmt.Print(colorReset)
 	}
 
@@ -125,9 +130,10 @@ func printViolations(violations []scanner.Finding) {
 	bold := colorBold + colorRed
 	gray := colorGray
 	white := colorWhite
+	yellow := colorYellow
 
 	fmt.Print(bold)
-	fmt.Println("Critical Issues:")
+	fmt.Println("Critical Control Gaps:")
 	fmt.Print(colorReset)
 	fmt.Println()
 
@@ -153,6 +159,11 @@ func printViolations(violations []scanner.Finding) {
 			fmt.Print(colorReset)
 		}
 
+		// Impact note for critical items
+		fmt.Print(yellow)
+		fmt.Println("   └─ Impact: Required for SOC2 audit")
+		fmt.Print(colorReset)
+
 		fmt.Println()
 	}
 }
@@ -163,7 +174,7 @@ func printWarnings(warnings []scanner.Finding) {
 	white := colorWhite
 
 	fmt.Print(bold)
-	fmt.Println("Warnings:")
+	fmt.Println("Warnings (Auditor Recommendations):")
 	fmt.Print(colorReset)
 	fmt.Println()
 
@@ -192,7 +203,7 @@ func printWarnings(warnings []scanner.Finding) {
 
 func printPassed(passed []scanner.Finding) {
 	fmt.Print(colorGreen)
-	fmt.Printf("✅ %d Controls Passed\n", len(passed))
+	fmt.Printf("✅ %d Controls Implemented\n", len(passed))
 	fmt.Print(colorReset)
 
 	// Show first few controls
@@ -219,14 +230,39 @@ func printNextSteps(result *scanner.Result) {
 	fmt.Print(colorReset)
 
 	if len(result.Violations) > 0 {
-		fmt.Println("   1. Fix critical issues (blocks SOC2 compliance)")
+		fmt.Println("   1. Fix critical gaps (required for SOC2 audit)")
 	}
 	if len(result.Warnings) > 0 {
-		fmt.Println("   2. Review warnings (best practices)")
+		fmt.Println("   2. Review warnings (auditor recommendations)")
 	}
 
 	fmt.Print(colorCyan)
 	fmt.Println("   3. Re-scan with: kiln scan <file>")
+	fmt.Print(colorReset)
+}
+
+func printAllGood(result *scanner.Result) {
+	bold := colorBold
+	green := colorGreen
+
+	fmt.Print(bold)
+	fmt.Print(green)
+	fmt.Println("🎉 Excellent! No critical gaps found.")
+	fmt.Print(colorReset)
+	fmt.Println()
+	fmt.Println("Your infrastructure code aligns well with SOC2 Trust Service Criteria.")
+	fmt.Println()
+	fmt.Print(colorGray)
+	fmt.Println("Remember: Kiln scans infrastructure code only. A full SOC2 audit will also")
+	fmt.Println("review organizational policies, procedures, and control operation over time.")
+	fmt.Print(colorReset)
+}
+
+func printFooter() {
+	fmt.Println()
+	fmt.Print(colorGray)
+	fmt.Println("Note: Kiln identifies potential control gaps. It does not certify SOC2 compliance.")
+	fmt.Println("      A formal audit by a licensed CPA firm is required for SOC2 compliance.")
 	fmt.Print(colorReset)
 }
 
