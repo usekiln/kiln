@@ -38,6 +38,30 @@ has_encryption(resource) {
     resource.config.server_side_encryption_configuration
 }
 
+# Alternative encryption check (for separate encryption resource)
+has_encryption(resource) {
+    encryption := input.resources[_]
+    encryption.type == "aws_s3_bucket_server_side_encryption_configuration"
+    # Match various reference formats
+    bucket_matches(encryption.config.bucket, resource)
+}
+
+# Helper to match bucket references
+bucket_matches(bucket_ref, resource) {
+    # Direct reference: "aws_s3_bucket.example.id"
+    bucket_ref == sprintf("%s.%s.id", [resource.type, resource.name])
+}
+
+bucket_matches(bucket_ref, resource) {
+    # Resource address: "aws_s3_bucket.example"
+    bucket_ref == resource.address
+}
+
+bucket_matches(bucket_ref, resource) {
+    # Just the name
+    bucket_ref == resource.name
+}
+
 # Deny unencrypted EBS volumes
 violations[finding] {
     resource := input.resources[_]
@@ -68,9 +92,18 @@ violations[finding] {
     }
 }
 
-# Define warnings as empty set for now (can add warning rules later)
-# This is the correct way to define an empty set in OPA
-warnings := set()
+# Pass for encrypted RDS
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_db_instance"
+    resource.config.storage_encrypted == true
+    
+    finding := {
+        "control": "CC6.6",
+        "resource": resource.address,
+        "message": sprintf("RDS instance '%s' has encryption enabled", [resource.name])
+    }
+}
 
 # Evaluate entry point - aggregates all findings
 evaluate = result {
