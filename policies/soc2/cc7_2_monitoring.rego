@@ -33,6 +33,19 @@ violations[finding] {
     }
 }
 
+# Pass when CloudTrail is properly configured
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_cloudtrail"
+    resource.config.enable_logging == true
+    
+    finding := {
+        "control": "CC7.2",
+        "resource": resource.address,
+        "message": sprintf("CloudTrail '%s' has logging enabled", [resource.name])
+    }
+}
+
 # CloudTrail should be multi-region
 warnings[finding] {
     resource := input.resources[_]
@@ -45,6 +58,19 @@ warnings[finding] {
         "resource": resource.address,
         "message": sprintf("CloudTrail '%s' is not multi-region", [resource.name]),
         "remediation": "Set is_multi_region_trail = true"
+    }
+}
+
+# Pass when CloudTrail is multi-region
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_cloudtrail"
+    resource.config.is_multi_region_trail == true
+    
+    finding := {
+        "control": "CC7.2",
+        "resource": resource.address,
+        "message": sprintf("CloudTrail '%s' is multi-region", [resource.name])
     }
 }
 
@@ -63,6 +89,19 @@ warnings[finding] {
     }
 }
 
+# Pass when S3 has logging
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_s3_bucket"
+    has_s3_logging(resource)
+    
+    finding := {
+        "control": "CC7.2",
+        "resource": resource.address,
+        "message": sprintf("S3 bucket '%s' has access logging enabled", [resource.name])
+    }
+}
+
 # VPCs should have flow logs
 violations[finding] {
     resource := input.resources[_]
@@ -75,6 +114,19 @@ violations[finding] {
         "resource": resource.address,
         "message": sprintf("VPC '%s' has no flow logs", [resource.name]),
         "remediation": "Add aws_flow_log resource"
+    }
+}
+
+# Pass when VPC has flow logs
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_vpc"
+    has_flow_logs(resource)
+    
+    finding := {
+        "control": "CC7.2",
+        "resource": resource.address,
+        "message": sprintf("VPC '%s' has flow logs enabled", [resource.name])
     }
 }
 

@@ -20,6 +20,19 @@ violations[finding] {
     }
 }
 
+# Pass when resource has required tags
+passed[finding] {
+    resource := input.resources[_]
+    taggable_resource(resource.type)
+    has_required_tags(resource)
+    
+    finding := {
+        "control": "CC8.1",
+        "resource": resource.address,
+        "message": sprintf("Resource '%s' has required tags", [resource.name])
+    }
+}
+
 # S3 buckets should have versioning for change tracking
 warnings[finding] {
     resource := input.resources[_]
@@ -32,6 +45,19 @@ warnings[finding] {
         "resource": resource.address,
         "message": sprintf("S3 bucket '%s' should enable versioning", [resource.name]),
         "remediation": "Enable versioning for change tracking"
+    }
+}
+
+# Pass when S3 has versioning for change tracking
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_s3_bucket"
+    has_versioning_enabled(resource)
+    
+    finding := {
+        "control": "CC8.1",
+        "resource": resource.address,
+        "message": sprintf("S3 bucket '%s' has versioning for change tracking", [resource.name])
     }
 }
 

@@ -20,6 +20,19 @@ violations[finding] {
     }
 }
 
+# Pass when S3 bucket has public access blocked
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_s3_bucket"
+    has_public_access_block(resource)
+    
+    finding := {
+        "control": "CC6.1",
+        "resource": resource.address,
+        "message": sprintf("S3 bucket '%s' blocks public access", [resource.name])
+    }
+}
+
 # Security groups should not allow unrestricted access
 violations[finding] {
     resource := input.resources[_]
@@ -32,6 +45,19 @@ violations[finding] {
         "resource": resource.address,
         "message": sprintf("Security group '%s' allows unrestricted access to sensitive ports", [resource.name]),
         "remediation": "Restrict ingress to specific IP ranges"
+    }
+}
+
+# Pass when security group has restricted access
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_security_group"
+    not has_unrestricted_ingress(resource)
+    
+    finding := {
+        "control": "CC6.1",
+        "resource": resource.address,
+        "message": sprintf("Security group '%s' has restricted access controls", [resource.name])
     }
 }
 

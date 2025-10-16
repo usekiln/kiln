@@ -20,6 +20,19 @@ violations[finding] {
     }
 }
 
+# Pass when RDS has automated backups
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_db_instance"
+    has_automated_backups(resource)
+    
+    finding := {
+        "control": "CC7.1",
+        "resource": resource.address,
+        "message": sprintf("RDS instance '%s' has automated backups configured", [resource.name])
+    }
+}
+
 # RDS instances should be Multi-AZ for production
 warnings[finding] {
     resource := input.resources[_]
@@ -36,6 +49,20 @@ warnings[finding] {
     }
 }
 
+# Pass when production RDS is Multi-AZ
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_db_instance"
+    resource.config.multi_az == true
+    is_production(resource)
+    
+    finding := {
+        "control": "CC7.1",
+        "resource": resource.address,
+        "message": sprintf("RDS instance '%s' is Multi-AZ for high availability", [resource.name])
+    }
+}
+
 # S3 buckets should have versioning
 warnings[finding] {
     resource := input.resources[_]
@@ -48,6 +75,19 @@ warnings[finding] {
         "resource": resource.address,
         "message": sprintf("S3 bucket '%s' has no versioning", [resource.name]),
         "remediation": "Add aws_s3_bucket_versioning with status = Enabled"
+    }
+}
+
+# Pass when S3 has versioning
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_s3_bucket"
+    has_versioning(resource)
+    
+    finding := {
+        "control": "CC7.1",
+        "resource": resource.address,
+        "message": sprintf("S3 bucket '%s' has versioning enabled", [resource.name])
     }
 }
 
