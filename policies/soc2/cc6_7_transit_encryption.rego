@@ -21,6 +21,33 @@ violations[finding] {
     }
 }
 
+# Pass when listener uses HTTPS
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_lb_listener"
+    resource.config.protocol == "HTTPS"
+    
+    finding := {
+        "control": "CC6.7",
+        "resource": resource.address,
+        "message": sprintf("Load balancer listener '%s' uses encrypted HTTPS", [resource.name])
+    }
+}
+
+# Pass when HTTP listener redirects to HTTPS
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_lb_listener"
+    resource.config.protocol == "HTTP"
+    is_http_redirect(resource)
+    
+    finding := {
+        "control": "CC6.7",
+        "resource": resource.address,
+        "message": sprintf("Load balancer listener '%s' redirects HTTP to HTTPS", [resource.name])
+    }
+}
+
 # ALB listeners must use HTTPS/TLS
 violations[finding] {
     resource := input.resources[_]
@@ -63,6 +90,19 @@ warnings[finding] {
         "resource": resource.address,
         "message": sprintf("S3 bucket '%s' does not enforce HTTPS-only access", [resource.name]),
         "remediation": "Add aws_s3_bucket_policy requiring aws:SecureTransport"
+    }
+}
+
+# Pass when S3 bucket has HTTPS enforcement
+passed[finding] {
+    resource := input.resources[_]
+    resource.type == "aws_s3_bucket"
+    has_https_policy(resource)
+    
+    finding := {
+        "control": "CC6.7",
+        "resource": resource.address,
+        "message": sprintf("S3 bucket '%s' enforces HTTPS-only access", [resource.name])
     }
 }
 
