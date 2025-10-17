@@ -22,8 +22,8 @@ func main() {
 	switch command {
 	case "scan":
 		if len(os.Args) < 3 {
-			fmt.Println("Error: no file specified")
-			fmt.Println("Usage: kiln scan <file.tf>")
+			fmt.Println("Error: no path specified")
+			fmt.Println("Usage: kiln scan <file.tf|directory|file1.tf file2.tf ...>")
 			os.Exit(1)
 		}
 		handleScan(os.Args[2:])
@@ -39,15 +39,6 @@ func main() {
 }
 
 func handleScan(args []string) {
-	filename := args[0]
-
-	// Read file
-	content, err := os.ReadFile(filename)
-	if err != nil {
-		fmt.Printf("Error reading file: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Initialize scanner with policy path
 	s, err := scanner.New([]string{"policies/soc2"})
 	if err != nil {
@@ -55,8 +46,16 @@ func handleScan(args []string) {
 		os.Exit(1)
 	}
 
-	// Scan
-	result, err := s.Scan(content)
+	var result *scanner.Result
+
+	// If single argument, could be file or directory
+	if len(args) == 1 {
+		result, err = s.ScanPath(args[0])
+	} else {
+		// Multiple files specified
+		result, err = s.ScanFiles(args)
+	}
+
 	if err != nil {
 		fmt.Printf("Scan failed: %v\n", err)
 		os.Exit(1)
@@ -75,13 +74,16 @@ func printUsage() {
 	fmt.Println("Kiln - SOC2 Compliance Scanner for Terraform")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  kiln scan <file.tf>    Scan a Terraform file")
-	fmt.Println("  kiln version           Show version")
-	fmt.Println("  kiln help              Show this help message")
+	fmt.Println("  kiln scan <path>              Scan a file or directory")
+	fmt.Println("  kiln scan <file1> <file2>...  Scan multiple files")
+	fmt.Println("  kiln version                  Show version")
+	fmt.Println("  kiln help                     Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  kiln scan main.tf")
-	fmt.Println("  kiln scan terraform/production.tf")
+	fmt.Println("  kiln scan main.tf                    # Scan single file")
+	fmt.Println("  kiln scan terraform/                 # Scan all .tf files in directory")
+	fmt.Println("  kiln scan s3.tf rds.tf vpc.tf       # Scan multiple specific files")
+	fmt.Println("  kiln scan ./infrastructure           # Scan infrastructure directory")
 	fmt.Println()
 	fmt.Println("Exit codes:")
 	fmt.Println("  0  All checks passed")
